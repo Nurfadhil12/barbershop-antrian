@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ApiDiagnostics } from '@/components/ApiDiagnostics';
 import { DateNav } from '@/components/DateNav';
 import { StatusBadge } from '@/components/StatusBadge';
 import { apiGet } from '@/lib/api';
@@ -78,7 +79,10 @@ export default async function RiwayatPage({
       </div>
 
       {error ? (
-        <div className="alert error">{error}</div>
+        <>
+          <div className="alert error">{error}</div>
+          <ApiDiagnostics />
+        </>
       ) : (
         <div className="card">
           <h2>

@@ -1,3 +1,4 @@
+import { ApiDiagnostics } from '@/components/ApiDiagnostics';
 import { BarberManager } from '@/components/BarberManager';
 import { getBarbers } from '@/lib/api';
 import type { BarberView } from '@/lib/types';
@@ -26,7 +27,10 @@ export default async function BarberPage() {
       </div>
 
       {error ? (
-        <div className="alert error">{error}</div>
+        <>
+          <div className="alert error">{error}</div>
+          <ApiDiagnostics />
+        </>
       ) : (
         <div className="card">
           <h2>Kelola kapster</h2>

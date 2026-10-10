@@ -1,4 +1,5 @@
 import { AddQueueForm } from '@/components/AddQueueForm';
+import { ApiDiagnostics } from '@/components/ApiDiagnostics';
 import { AutoRefresh } from '@/components/AutoRefresh';
 import { DateNav } from '@/components/DateNav';
 import { QueueActions } from '@/components/QueueActions';
@@ -41,6 +42,7 @@ export default async function PapanAntrianPage({
           </div>
         </div>
         <div className="alert error">{error ?? 'Data tidak tersedia.'}</div>
+        <ApiDiagnostics />
       </>
     );
   }

@@ -1,3 +1,4 @@
+import { ApiDiagnostics } from '@/components/ApiDiagnostics';
 import { ServiceManager } from '@/components/ServiceManager';
 import { getServices } from '@/lib/api';
 import type { ServiceView } from '@/lib/types';
@@ -26,7 +27,10 @@ export default async function LayananPage() {
       </div>
 
       {error ? (
-        <div className="alert error">{error}</div>
+        <>
+          <div className="alert error">{error}</div>
+          <ApiDiagnostics />
+        </>
       ) : (
         <div className="card">
           <h2>Kelola layanan</h2>
