@@ -15,7 +15,8 @@
     },
     "api": {
       "root": "api/",
-      "framework": "nestjs"
+      "runtime": "container",
+      "entrypoint": "Dockerfile"
     }
   },
   "rewrites": [

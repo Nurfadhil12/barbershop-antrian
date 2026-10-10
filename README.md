@@ -151,10 +151,28 @@ Yang perlu diketahui sebelum pindah penuh:
 
 ### Kalau deploy Vercel gagal
 
+**`FUNCTION_INVOCATION_FAILED` / "A server error has occurred" pada SEMUA endpoint api**
+(termasuk `/api/ping` yang tidak menyentuh database) = proses function crash, bukan error aplikasi.
+Pada Prisma 7 penyebab yang sudah terbukti adalah pembundelan: client Prisma 7 memuat
+**query compiler WASM** (`@prisma/client/runtime/query_compiler_fast_bg.postgresql.wasm-base64.mjs`)
+lewat `require` dinamis saat runtime, dan bundler function Vercel (@vercel/node) tidak membawanya
+serta. Gejalanya identik dengan masalah database (500 pada semua endpoint), padahal bukan.
+
+Solusi yang dipakai repo ini: jalankan service `api` sebagai **container**, bukan runtime Node
+terdeteksi:
+
+```json
+"api": { "root": "api/", "runtime": "container", "entrypoint": "Dockerfile" }
+```
+
+Yang dibangun adalah image Docker yang sama dengan jalur VPS (`api/Dockerfile`), jadi tidak ada
+bundler yang menyentuh `node_modules`. Konsekuensinya build pertama lebih lama, dan aplikasi harus
+mendengarkan `$PORT` (Vercel mengirim `PORT`, default 80 — `api/src/main.ts` sudah membacanya).
+
 **`Multiple frameworks detected in project root: Next.js, Container. Specify "framework" explicitly in services.`**
-Vercel mendeteksi `Dockerfile` di dalam `api/` sebagai framework "Container" yang bersaing
-dengan Next.js milik `web/`. Solusinya: tulis `framework` eksplisit per service di `vercel.json`
-(sudah dilakukan di repo ini) — slug yang sah antara lain `"nextjs"`, `"nestjs"`, `"container"`.
+Vercel mendeteksi `Dockerfile` di dalam `api/` sebagai framework "Container" yang bersaing dengan
+Next.js milik `web/`. Kalau service api dijalankan sebagai Node (bukan container), tulis `framework`
+eksplisit per service — slug yang sah antara lain `"nextjs"`, `"nestjs"`, `"container"`.
 
 **Build sukses tapi deploy tetap tidak jalan sebagai dua service**
 Vercel hanya membangun model Services kalau **dua** syarat terpenuhi: (1) `vercel.json` memuat key
@@ -168,6 +186,18 @@ dua lapis pengaman: script `postinstall` (`prisma generate`) sehingga ikut jalan
 `npm install`, dan `build` = `prisma generate && nest build`. `api/prisma7.config.ts` memakai URL
 placeholder kalau `DATABASE_URL` belum ada, supaya `generate` tidak gagal (perintah yang benar-benar
 menyambung ke database tetap butuh URL asli).
+
+**Cara memisahkan masalah database vs masalah aplikasi di Vercel**
+Buka `/api/ping` (tidak menyentuh database) dan `/api/health` (menyentuh database):
+
+| `/api/ping` | `/api/health` | Artinya |
+|---|---|---|
+| 200 | `db: "up"` | sehat |
+| 200 | `db: "down"` + `dbSource`/`dbHost`/`error` | aplikasi sehat, `DATABASE_URL` salah/belum diset → perbaiki lalu `prisma migrate deploy` |
+| crash / 500 juga | — | bukan database: masalah boot/bundling → pakai `runtime: "container"` |
+
+`/api/health` juga memetakan error koneksi: `P1001` → 503 "Database tidak bisa dijangkau",
+`P1000` → "Kredensial database ditolak", `P1017` → "Koneksi ditutup server, coba lagi".
 
 Catatan kejujuran: jalur Vercel ini sudah disiapkan dan diverifikasi secara lokal (build
 `vercel-build`, pool adapter terhadap PostgreSQL nyata, `vercel.json` valid), tetapi **belum diuji

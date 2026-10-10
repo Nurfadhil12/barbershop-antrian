@@ -86,7 +86,7 @@ RUN if [ -x node_modules/.bin/prisma ] && [ -f prisma/schema.prisma ]; then \
 # ────────────────────────────── runtime ─────────────────────────────
 FROM node:${NODE_VERSION}-alpine AS runtime
 ARG NODE_VERSION
-RUN apk add --no-cache openssl curl tini
+RUN apk add --no-cache openssl curl tini libcap
 WORKDIR /app
 
 ENV NODE_ENV=production \
@@ -102,6 +102,16 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /app/logs && chown 
 
 USER node
 EXPOSE 3000
+
+# Izinkan user non-root mengikat port <1024. Platform container (termasuk Vercel)
+# biasanya menyuntik PORT=80 ke container; tanpa kapabilitas ini proses gagal start
+# dengan "listen EACCES: permission denied 0.0.0.0:80". Docker sendiri menyetel
+# net.ipv4.ip_unprivileged_port_start=0 sehingga sering tidak terlihat, tapi platform
+# lain bisa lebih ketat — jadi jangan bergantung pada setting itu.
+USER root
+RUN setcap 'cap_net_bind_service=+ep' "$(command -v node)" && \
+    getcap "$(command -v node)"
+USER node
 
 # Liveness sederhana tanpa perlu endpoint tambahan: cek port benar-benar listen.
 # Kalau sudah punya GET /health (mis. @nestjs/terminus), ganti test di bawah jadi:
