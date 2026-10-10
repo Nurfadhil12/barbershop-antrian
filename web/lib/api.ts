@@ -55,10 +55,15 @@ async function request<T>(path: string): Promise<T> {
 }
 
 function extractMessage(data: unknown, status: number): string {
-  const message = (data as { message?: unknown } | null)?.message;
-  if (Array.isArray(message)) return message.join(', ');
-  if (typeof message === 'string') return message;
-  return `Permintaan gagal (HTTP ${status}).`;
+  const body = data as { message?: unknown; code?: unknown } | null;
+  const message = body?.message;
+
+  // Sertakan kode error Prisma (mis. P2021) supaya penyebabnya bisa dicari langsung.
+  const code = typeof body?.code === 'string' ? ` (kode ${body.code})` : '';
+
+  if (Array.isArray(message)) return `${message.join(', ')}${code}`;
+  if (typeof message === 'string') return `${message}${code}`;
+  return `Permintaan gagal (HTTP ${status})${code}.`;
 }
 
 export const apiGet = request;

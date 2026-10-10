@@ -29,6 +29,18 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         message: 'Data ini masih dipakai oleh data lain, jadi belum bisa dihapus.',
       },
       P2025: { status: HttpStatus.NOT_FOUND, message: 'Data tidak ditemukan.' },
+      // Skema database belum dimigrasi — paling sering terjadi setelah database baru dibuat.
+      P2021: {
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        message:
+          'Tabel belum ada di database ini. Jalankan migrasi: npx prisma migrate deploy (lihat README, bagian Deploy ke Vercel).',
+      },
+      P2022: {
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        message:
+          'Kolom belum ada di database ini — skema tertinggal. Jalankan migrasi: npx prisma migrate deploy.',
+      },
+      P2010: { status: HttpStatus.BAD_REQUEST, message: 'Query database gagal dijalankan.' },
       P2000: { status: HttpStatus.BAD_REQUEST, message: 'Nilai yang dikirim terlalu panjang.' },
     };
 
