@@ -20,7 +20,12 @@ FROM node:${NODE_VERSION}-alpine AS deps
 ARG NODE_VERSION
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+# Schema + config Prisma perlu ada SEBELUM npm ci, karena ada script postinstall
+# "prisma generate" (client Prisma 7 di-generate sebagai kode).
+COPY prisma ./prisma
+COPY prisma7.config.ts ./
 RUN set -eux; \
     if [ -f package-lock.json ]; then npm ci; \
     elif [ -f yarn.lock ]; then yarn install --frozen-lockfile --ignore-scripts; \
@@ -57,6 +62,9 @@ ENV NODE_ENV=production
 CMD ["sh", "-c", "if [ -f prisma/schema.prisma ]; then npx prisma migrate deploy; elif npm run --silent migration:run >/dev/null 2>&1; then npm run migration:run; elif npm run --silent db:migrate >/dev/null 2>&1; then npm run db:migrate; else echo '[migrate] tidak ada prisma/schema.prisma maupun script migration:* — dilewati'; fi"]
 
 # ──────────────────── prod-deps (hanya dependencies) ────────────────
+# --ignore-scripts penting: script postinstall "prisma generate" butuh Prisma CLI
+# yang merupakan devDependency, jadi tidak ada di stage ini. Client Prisma sudah
+# di-generate dan ikut ter-compile di stage `build` (masuk ke dist/).
 FROM node:${NODE_VERSION}-alpine AS prod-deps
 ARG NODE_VERSION
 RUN apk add --no-cache libc6-compat openssl
@@ -64,10 +72,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 RUN set -eux; \
-    if [ -f package-lock.json ]; then npm ci --omit=dev; \
+    if [ -f package-lock.json ]; then npm ci --omit=dev --ignore-scripts; \
     elif [ -f yarn.lock ]; then yarn install --production --frozen-lockfile --ignore-scripts; \
-    elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --prod --frozen-lockfile; \
-    else npm install --omit=dev; fi
+    elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --prod --frozen-lockfile --ignore-scripts; \
+    else npm install --omit=dev --ignore-scripts; fi
 # Diambil dari stage build (bukan dari context) supaya aman walau api/prisma tidak ada
 COPY --from=build /app/prisma ./prisma
 # Hanya jalan kalau prisma CLI ada di dependencies (bukan devDependencies)

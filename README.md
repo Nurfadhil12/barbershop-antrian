@@ -149,6 +149,26 @@ Yang perlu diketahui sebelum pindah penuh:
 - `.env` tidak dipakai Vercel; semua environment lewat dashboard/integrasi.
 - Function Hobby: durasi maksimum 300s, cron harian. Cold start masih ada (Fluid compute).
 
+### Kalau deploy Vercel gagal
+
+**`Multiple frameworks detected in project root: Next.js, Container. Specify "framework" explicitly in services.`**
+Vercel mendeteksi `Dockerfile` di dalam `api/` sebagai framework "Container" yang bersaing
+dengan Next.js milik `web/`. Solusinya: tulis `framework` eksplisit per service di `vercel.json`
+(sudah dilakukan di repo ini) — slug yang sah antara lain `"nextjs"`, `"nestjs"`, `"container"`.
+
+**Build sukses tapi deploy tetap tidak jalan sebagai dua service**
+Vercel hanya membangun model Services kalau **dua** syarat terpenuhi: (1) `vercel.json` memuat key
+`services`, dan (2) Framework Preset project di dashboard diset ke **Services**
+(Settings → Build and Deployment → Framework Preset). Kalau salah satu tidak terpenuhi, Vercel
+jatuh kembali ke deteksi framework biasa dan mengabaikan `services`.
+
+**Error terkait Prisma Client tidak ditemukan saat build**
+Client Prisma 7 di-generate sebagai kode TypeScript, jadi harus ada saat build. Repo ini memakai
+dua lapis pengaman: script `postinstall` (`prisma generate`) sehingga ikut jalan setiap
+`npm install`, dan `build` = `prisma generate && nest build`. `api/prisma7.config.ts` memakai URL
+placeholder kalau `DATABASE_URL` belum ada, supaya `generate` tidak gagal (perintah yang benar-benar
+menyambung ke database tetap butuh URL asli).
+
 Catatan kejujuran: jalur Vercel ini sudah disiapkan dan diverifikasi secara lokal (build
 `vercel-build`, pool adapter terhadap PostgreSQL nyata, `vercel.json` valid), tetapi **belum diuji
 deploy ke Vercel** karena butuh akun Vercel kamu.

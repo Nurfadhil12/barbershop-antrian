@@ -3,6 +3,7 @@
   "services": {
     "web": {
       "root": "web/",
+      "framework": "nextjs",
       "bindings": [
         {
           "type": "service",
@@ -13,7 +14,8 @@
       ]
     },
     "api": {
-      "root": "api/"
+      "root": "api/",
+      "framework": "nestjs"
     }
   },
   "rewrites": [
