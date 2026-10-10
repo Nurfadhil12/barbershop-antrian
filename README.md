@@ -149,6 +149,31 @@ Yang perlu diketahui sebelum pindah penuh:
 - `.env` tidak dipakai Vercel; semua environment lewat dashboard/integrasi.
 - Function Hobby: durasi maksimum 300s, cron harian. Cold start masih ada (Fluid compute).
 
+### Migrasi database di Vercel
+
+Container api menyiapkan skemanya **sendiri saat start** — jadi tidak ada langkah manual:
+
+- `RUN_MIGRATIONS` tidak di-set (atau `auto`) → `prisma migrate deploy` dijalankan sebelum aplikasi
+  melayani request. Ini mode yang dipakai di Vercel.
+- `RUN_MIGRATIONS=true` → wajib jalan; kalau Prisma CLI/schema tidak ada di image, container berhenti
+  dengan pesan jelas (lebih baik daripada melayani request di atas skema yang salah).
+- `RUN_MIGRATIONS=false` → dilewati. Ini yang dipakai jalur Docker Compose, karena migrasinya
+  ditangani service `api-migrate` terpisah.
+
+⚠️ Kalau di Vercel environment variable `RUN_MIGRATIONS` bernilai `false`, migrasi otomatis itu mati —
+hapus variabelnya atau ubah jadi `true`.
+
+Kalau migrasi gagal, container mencoba 3× (jeda 5 detik) lalu berhenti supaya tidak ada aplikasi yang
+melayani request di atas skema yang salah.
+
+Jalur manual (kalau perlu, mis. dari Mac dengan URL langsung Neon):
+
+```bash
+cd api
+DATABASE_URL="postgresql://…@ep-xxx.…neon.tech/neondb?sslmode=require" npx prisma migrate deploy
+DATABASE_URL="…" npm run seed   # opsional: data contoh
+```
+
 ### Kalau deploy Vercel gagal
 
 **`FUNCTION_INVOCATION_FAILED` / "A server error has occurred" pada SEMUA endpoint api**

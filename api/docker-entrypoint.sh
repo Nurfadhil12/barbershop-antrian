@@ -30,23 +30,40 @@ if [ -n "${DB_HOST:-}" ]; then
   fi
 fi
 
-# ── Migrasi (RUN_MIGRATIONS=true; butuh CLI migrasi di image) ──
-if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
-  if [ -f prisma/schema.prisma ] && [ -x node_modules/.bin/prisma ]; then
-    log "menjalankan: prisma migrate deploy"
-    node_modules/.bin/prisma migrate deploy
-  elif [ -f prisma/schema.prisma ]; then
-    log "prisma/schema.prisma ada tapi CLI prisma tidak ada di dependencies."
-    log "→ jalankan 'make migrate' (service api-migrate / target migrator) sebelum deploy."
-  elif npm run --silent migration:run >/dev/null 2>&1; then
-    log "menjalankan: npm run migration:run (TypeORM)"
-    npm run migration:run
-  elif npm run --silent db:migrate >/dev/null 2>&1; then
-    log "menjalankan: npm run db:migrate"
-    npm run db:migrate
-  else
-    log "tidak ada mekanisme migrasi terdeteksi — dilewati"
-  fi
+# ── Migrasi database ──
+# RUN_MIGRATIONS:
+#   auto  (default) = jalankan migrasi kalau Prisma CLI + schema tersedia di image
+#   true            = wajib; kalau tool-nya tidak ada, ini dianggap kesalahan konfigurasi
+#   false           = jangan pernah jalankan (dipakai jalur compose, yang migrasinya
+#                     ditangani service api-migrate terpisah)
+#
+# Tujuannya: platform seperti Vercel Services tidak punya langkah migrasi terpisah,
+# jadi container menyiapkan skemanya sendiri sebelum aplikasi melayani request.
+MIGRATE_MODE="${RUN_MIGRATIONS:-auto}"
+
+if [ "$MIGRATE_MODE" = "false" ]; then
+  log "migrasi dilewati (RUN_MIGRATIONS=false)"
+elif [ -f prisma/schema.prisma ] && [ -x node_modules/.bin/prisma ]; then
+  log "menjalankan: prisma migrate deploy"
+  attempt=1
+  while true; do
+    if node_modules/.bin/prisma migrate deploy; then
+      break
+    fi
+    if [ "$attempt" -ge 3 ]; then
+      log "ERROR: migrasi gagal setelah ${attempt} percobaan — container dihentikan supaya"
+      log "tidak ada aplikasi yang melayani request di atas skema yang salah."
+      exit 1
+    fi
+    log "migrasi gagal (percobaan ${attempt}/3) — coba lagi dalam 5 detik"
+    attempt=$((attempt + 1))
+    sleep 5
+  done
+elif [ "$MIGRATE_MODE" = "true" ]; then
+  log "ERROR: RUN_MIGRATIONS=true tapi Prisma CLI atau prisma/schema.prisma tidak ada di image."
+  exit 1
+else
+  log "migrasi dilewati (mode auto: Prisma CLI/schema tidak ada di image)"
 fi
 
 # ── Start aplikasi ──

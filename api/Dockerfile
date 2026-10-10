@@ -97,8 +97,20 @@ COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/prisma ./prisma
+# Prisma 7: URL datasource untuk CLI ada di file ini, jadi wajib ada di image runtime
+# supaya `prisma migrate deploy` bisa jalan saat container start.
+COPY --from=build --chown=node:node /app/prisma7.config.ts ./prisma7.config.ts
 COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /app/logs && chown -R node:node /app
+
+# Prisma CLI untuk migrasi saat container start (lihat docker-entrypoint.sh).
+# Dipasang eksplisit di image runtime supaya platform yang tidak punya langkah
+# migrasi terpisah (mis. Vercel Services) tetap bisa menyiapkan skema sendiri.
+# Versinya disamakan dengan @prisma/client agar tidak ada ketidakcocokan.
+RUN npm install --no-save --no-package-lock prisma@7.10.0 > /dev/null 2>&1 && \
+    node_modules/.bin/prisma --version > /dev/null 2>&1 && \
+    npm cache clean --force > /dev/null 2>&1 && rm -rf /root/.npm || \
+    echo "[build] PERINGATAN: Prisma CLI gagal dipasang (migrasi otomatis tidak tersedia)"
 
 USER node
 EXPOSE 3000
