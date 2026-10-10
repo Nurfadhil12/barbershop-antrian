@@ -1,0 +1,73 @@
+// api/prisma/schema.prisma — model data antrian barbershop
+//
+// Prisma 7: URL koneksi TIDAK lagi ditulis di sini — lihat api/prisma7.config.ts
+// (untuk CLI/migrasi) dan driver adapter @prisma/adapter-pg (untuk runtime).
+// Client di-generate ke src/generated/prisma (di-.gitignore) via: npm run prisma:generate
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Layanan: Potong Rambut, Cukur Jenggot, Cuci + Blow, dsb.
+model Service {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  durationMin Int      @default(30) @map("duration_min")
+  price       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  queues      Queue[]
+
+  @@map("services")
+}
+
+// Kapster
+model Barber {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  queues    Queue[]
+
+  @@map("barbers")
+}
+
+enum QueueStatus {
+  WAITING
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// Tiket antrian. Nomor direset setiap hari: number = urutan dalam queueDate,
+// code = "A-001" untuk ditampilkan/dipanggil.
+model Queue {
+  id            Int         @id @default(autoincrement())
+  number        Int
+  code          String
+  queueDate     DateTime    @map("queue_date") @db.Date
+  customerName  String      @map("customer_name")
+  customerPhone String?     @map("customer_phone")
+  status        QueueStatus @default(WAITING)
+  note          String?
+  serviceId     Int         @map("service_id")
+  barberId      Int?        @map("barber_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  startedAt     DateTime?   @map("started_at")
+  finishedAt    DateTime?   @map("finished_at")
+
+  service Service @relation(fields: [serviceId], references: [id])
+  barber  Barber? @relation(fields: [barberId], references: [id])
+
+  @@unique([queueDate, number])
+  @@index([queueDate, status])
+  @@map("queues")
+}

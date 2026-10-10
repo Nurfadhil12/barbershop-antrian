@@ -1,0 +1,45 @@
+# .gitignore akar — berlaku untuk seluruh repo (api/, web/, deployment/).
+# .gitignore di tiap subfolder menambahkan aturan spesifiknya sendiri.
+
+# ── Dependencies & artefak build ──
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+.nest/
+
+# ── Prisma 7: client di-generate saat build (npm run prisma:generate) ──
+api/src/generated/
+
+# ── Secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Hasil backup & sertifikat (deployment) ──
+deployment/backups/
+deployment/certbot/
+deployment/certbot-www/
+deployment/letsencrypt/
+deployment/nginx/logs/
+*.dump
+*.dump.gz
+*.sql.gz
+*.pem
+*.key
+
+# ── Log ──
+*.log
+logs/
+
+# ── Editor & OS ──
+.DS_Store
+.vscode/
+.idea/
+
+# ── Vercel ──
+.vercel/

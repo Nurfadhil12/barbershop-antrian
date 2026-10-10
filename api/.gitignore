@@ -1,0 +1,20 @@
+# api/.gitignore
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.nest/
+
+# Prisma 7: client di-generate saat build (npm run prisma:generate)
+src/generated/
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# log
+*.log
+
+# OS
+.DS_Store
