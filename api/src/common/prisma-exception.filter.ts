@@ -16,6 +16,13 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
 
     const map: Record<string, { status: number; message: string }> = {
+      // Koneksi database — khususnya relevan di serverless (Neon bangun dari cold start,
+      // pooler memutus koneksi idle, env var salah).
+      P1000: { status: HttpStatus.SERVICE_UNAVAILABLE, message: 'Kredensial database ditolak. Periksa DATABASE_URL.' },
+      P1001: { status: HttpStatus.SERVICE_UNAVAILABLE, message: 'Database tidak bisa dijangkau. Periksa host DATABASE_URL dan status database.' },
+      P1002: { status: HttpStatus.GATEWAY_TIMEOUT, message: 'Koneksi ke database timeout. Coba beberapa saat lagi.' },
+      P1008: { status: HttpStatus.GATEWAY_TIMEOUT, message: 'Operasi database melebihi batas waktu (timeout).' },
+      P1017: { status: HttpStatus.SERVICE_UNAVAILABLE, message: 'Koneksi database ditutup oleh server. Coba lagi.' },
       P2002: { status: HttpStatus.CONFLICT, message: 'Data dengan nilai itu sudah ada (duplikat).' },
       P2003: {
         status: HttpStatus.CONFLICT,
@@ -31,7 +38,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
 
     return res.status(status).json({
       statusCode: status,
-      error: status === 500 ? 'Internal Server Error' : 'Conflict',
+      error: status === 500 ? 'Internal Server Error' : 'Terjadi masalah pada database',
       message,
       code: exception.code,
     });

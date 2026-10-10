@@ -42,6 +42,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       max: Number(process.env.DB_POOL_MAX ?? 5),
       idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 10_000),
       connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS ?? 10_000),
+      // Serverless: izinkan proses keluar saat tidak ada koneksi aktif
+      allowExitOnIdle: true,
+    });
+
+    // WAJIB ada. node-postgres memancarkan event 'error' untuk klien idle yang
+    // bermasalah (koneksi diputus pooler/timeout). Tanpa listener, event itu
+    // menjadi unhandled error dan MEMATIKAN proses — di Vercel gejalanya
+    // "A server error has occurred / FUNCTION_INVOCATION_FAILED", bukan error
+    // aplikasi yang bisa dibaca. Dengan listener ini kegagalan koneksi hanya
+    // tercatat di log dan /api/health melaporkannya.
+    pool.on('error', (error) => {
+      this.logger.error(`Koneksi database bermasalah (dari pool): ${error.message}`);
     });
 
     if (typeof vercelFunctions.attachDatabasePool === 'function') {

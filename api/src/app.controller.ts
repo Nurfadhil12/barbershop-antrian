@@ -1,9 +1,25 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 
 @Controller()
 export class AppController {
+  private readonly logger = new Logger(AppController.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * GET /api/ping — sengaja TIDAK menyentuh database, dan tidak bergantung pada
+   * PrismaService (inject-nya opsional lewat dekorator @Optional? tidak: PrismaService
+   * tetap di-inject karena health butuh, tapi ping tidak memanggil query apa pun).
+   *
+   * Gunanya saat diagnosa deploy: kalau /api/ping hidup tapi /api/health gagal,
+   * masalahnya di database. Kalau keduanya tidak bisa diakses sama sekali,
+   * masalahnya di boot/bundling aplikasi.
+   */
+  @Get('ping')
+  ping() {
+    return { pong: true, service: 'barbershop-queue-api', time: new Date().toISOString() };
+  }
 
   /**
    * GET /api/health — dipakai healthcheck, smoke test, dan (yang terpenting saat
@@ -22,6 +38,7 @@ export class AppController {
       db = 'up';
     } catch (cause) {
       error = (cause as Error).message?.slice(0, 300) ?? 'query gagal';
+      this.logger.error(`Health check: query database gagal — ${error.split('\n')[0]}`);
     }
 
     return {
