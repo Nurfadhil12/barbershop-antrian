@@ -2,9 +2,18 @@
 
 import { useEffect, useState } from 'react';
 
+interface MigrateStatus {
+  status?: string;
+  attempts?: number;
+  error?: string | null;
+  updatedAt?: string;
+}
+
 interface HealthResponse {
   status?: string;
   db?: string;
+  schema?: string;
+  migrate?: MigrateStatus | null;
   latencyMs?: number;
   dbSource?: string;
   dbHost?: string;
@@ -57,6 +66,25 @@ export function ApiDiagnostics() {
   if (health) {
     rows.push(['status API', String(health.status ?? '—')]);
     rows.push(['database', String(health.db ?? '—')]);
+    if (health.schema) {
+      rows.push([
+        'skema database',
+        health.schema === 'ok' ? 'ok (tabel ada)' : health.schema === 'missing' ? 'BELUM ADA (tabel belum dimigrasi)' : '—',
+      ]);
+    }
+    if (health.migrate) {
+      const label: Record<string, string> = {
+        done: 'selesai',
+        pending: 'sedang berjalan',
+        failed: 'GAGAL',
+        disabled: 'dimatikan (RUN_MIGRATIONS=false)',
+      };
+      rows.push([
+        'migrasi otomatis',
+        `${label[String(health.migrate.status)] ?? String(health.migrate.status)}${health.migrate.attempts ? ` (percobaan ${health.migrate.attempts})` : ''}`,
+      ]);
+      if (health.migrate.error) rows.push(['error migrasi', health.migrate.error]);
+    }
     rows.push(['URL database dari', String(health.dbSource ?? '—')]);
     rows.push(['host database', String(health.dbHost ?? '—')]);
     if (typeof health.latencyMs === 'number') rows.push(['latensi query', `${health.latencyMs} ms`]);

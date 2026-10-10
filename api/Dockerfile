@@ -91,6 +91,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=3000 \
+    MIGRATE_STATUS_FILE=/app/logs/migrate-status.json \
     TZ=UTC
 
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
@@ -113,7 +114,10 @@ RUN npm install --no-save --no-package-lock prisma@7.10.0 > /dev/null 2>&1 && \
     echo "[build] PERINGATAN: Prisma CLI gagal dipasang (migrasi otomatis tidak tersedia)"
 
 USER node
-EXPOSE 3000
+# PORT=3000 di atas: kalau platform menyuntik PORT sendiri, nilai platform yang dipakai
+# (NestJS membaca process.env.PORT). 80 didaftarkan karena platform container umumnya
+# mengarahkan trafik ke sana secara default.
+EXPOSE 3000 80
 
 # Izinkan user non-root mengikat port <1024. Platform container (termasuk Vercel)
 # biasanya menyuntik PORT=80 ke container; tanpa kapabilitas ini proses gagal start

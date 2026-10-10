@@ -1,5 +1,13 @@
 import { Controller, Get, Logger } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
 import { PrismaService } from './prisma/prisma.service';
+
+interface MigrateStatus {
+  status: 'pending' | 'done' | 'failed' | 'disabled';
+  attempts: number;
+  error: string | null;
+  updatedAt: string;
+}
 
 @Controller()
 export class AppController {
@@ -22,10 +30,25 @@ export class AppController {
   }
 
   /**
+   * Status migrasi yang ditulis docker-entrypoint.sh saat container start.
+   * Dibaca dari berkas, bukan dari database — supaya tetap bisa dibaca walau
+   * database belum bisa dijangkau.
+   */
+  private readMigrateStatus(): MigrateStatus | null {
+    const file = process.env.MIGRATE_STATUS_FILE;
+    if (!file) return null;
+    try {
+      return JSON.parse(readFileSync(file, 'utf8')) as MigrateStatus;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * GET /api/health — dipakai healthcheck, smoke test, dan (yang terpenting saat
    * deploy) untuk tahu MENGAPA API tidak bisa melayani: apakah URL database belum
-   * di-set, host-nya salah, atau kredensialnya ditolak. Tidak pernah membocorkan
-   * kredensial — hanya host.
+   * di-set, host-nya salah, kredensialnya ditolak, atau skemanya belum dimigrasi.
+   * Tidak pernah membocorkan kredensial — hanya host.
    */
   @Get('health')
   async health() {
@@ -41,18 +64,60 @@ export class AppController {
       this.logger.error(`Health check: query database gagal — ${error.split('\n')[0]}`);
     }
 
+    // Database bisa "up" (SELECT 1 jalan) sementara tabelnya belum ada — kejadian ini
+    // yang dulu membingungkan: health hijau tapi aplikasi gagal dengan P2021.
+    let schema: 'ok' | 'missing' | 'unknown' = 'unknown';
+    if (db === 'up') {
+      try {
+        const rows = await this.prisma.$queryRaw<
+          { present: string | null }[]
+        >`SELECT to_regclass('public.services')::text AS present`;
+        schema = rows[0]?.present ? 'ok' : 'missing';
+      } catch {
+        schema = 'unknown';
+      }
+    }
+
+    const migrate = this.readMigrateStatus();
+
     return {
-      status: db === 'up' ? 'ok' : 'degraded',
+      status: db === 'up' && schema !== 'missing' ? 'ok' : 'degraded',
       db,
+      schema,
+      migrate,
       latencyMs: Date.now() - startedAt,
       dbSource: this.prisma.urlSource,
       dbHost: this.prisma.urlHost,
-      hint: this.prisma.urlMissing
-        ? 'DATABASE_URL belum di-set. Pasang database (mis. integrasi Neon) atau set env var DATABASE_URL/POSTGRES_PRISMA_URL/POSTGRES_URL.'
-        : null,
+      hint: this.healthHint(db, schema, migrate),
       error,
       service: 'barbershop-queue-api',
       time: new Date().toISOString(),
     };
+  }
+
+  private healthHint(
+    db: 'up' | 'down',
+    schema: 'ok' | 'missing' | 'unknown',
+    migrate: MigrateStatus | null,
+  ): string | null {
+    if (this.prisma.urlMissing) {
+      return 'DATABASE_URL belum di-set. Pasang database (mis. integrasi Neon) atau set env var DATABASE_URL/POSTGRES_PRISMA_URL/POSTGRES_URL.';
+    }
+    if (db === 'down') {
+      return 'Host database tidak bisa dijangkau dari container ini. Periksa isi DATABASE_URL (host/sslmode) dan status database.';
+    }
+    if (schema === 'missing') {
+      if (migrate?.status === 'failed') {
+        return 'Migrasi otomatis GAGAL (lihat migrate.error). Setelah diperbaiki, redeploy.';
+      }
+      if (migrate?.status === 'pending') {
+        return 'Migrasi sedang berjalan di latar — muat ulang sebentar lagi.';
+      }
+      if (migrate?.status === 'disabled') {
+        return 'Migrasi otomatis dimatikan (RUN_MIGRATIONS=false). Jalankan manual: npx prisma migrate deploy';
+      }
+      return 'Tabel belum ada. Jalankan migrasi: npx prisma migrate deploy';
+    }
+    return null;
   }
 }

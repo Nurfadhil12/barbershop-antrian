@@ -151,20 +151,30 @@ Yang perlu diketahui sebelum pindah penuh:
 
 ### Migrasi database di Vercel
 
-Container api menyiapkan skemanya **sendiri saat start** — jadi tidak ada langkah manual:
+Container api menyiapkan skemanya **sendiri saat start**, tapi aplikasi **selalu start lebih dulu** —
+tidak pernah menunggu migrasi sampai selesai:
 
-- `RUN_MIGRATIONS` tidak di-set (atau `auto`) → `prisma migrate deploy` dijalankan sebelum aplikasi
-  melayani request. Ini mode yang dipakai di Vercel.
-- `RUN_MIGRATIONS=true` → wajib jalan; kalau Prisma CLI/schema tidak ada di image, container berhenti
-  dengan pesan jelas (lebih baik daripada melayani request di atas skema yang salah).
-- `RUN_MIGRATIONS=false` → dilewati. Ini yang dipakai jalur Docker Compose, karena migrasinya
-  ditangani service `api-migrate` terpisah.
+1. Aplikasi langsung mengikat `$PORT` (dalam praktik ~2 detik) dan mulai melayani request.
+2. `prisma migrate deploy` berjalan **di latar**. Start aplikasi ditahan paling lama
+   `MIGRATE_WAIT_SECONDS` (default **4 detik**) supaya migrasi yang biasanya cepat tidak
+   membuat request pertama gagal; kalau belum selesai, aplikasi tetap start dan migrasi lanjut.
+3. Hasilnya dilaporkan di `GET /api/health`: `schema` (`ok`/`missing`) dan
+   `migrate` (`done`/`pending`/`failed`/`disabled` + pesan error aslinya). Halaman yang gagal
+   memuat data menampilkan ini di panel Diagnostik API.
 
-⚠️ Kalau di Vercel environment variable `RUN_MIGRATIONS` bernilai `false`, migrasi otomatis itu mati —
+Kenapa begitu: platform container (Vercel) hanya memberi **~15 detik** untuk container mengikat
+`$PORT`. Kalau lewat, SEMUA request dijawab `FUNCTION_INVOCATION_FAILED` — termasuk `/api/health`,
+sehingga tidak ada cara untuk tahu apa yang salah. Karena itu migrasi tidak boleh memblokir start,
+dan kegagalannya tidak boleh mematikan container.
+
+`RUN_MIGRATIONS`:
+
+- tidak di-set atau `auto` → jalankan migrasi kalau Prisma CLI + schema ada di image (mode Vercel)
+- `true` → sama, tapi ketidakhadiran tool-nya dicatat sebagai kesalahan konfigurasi
+- `false` → jangan jalankan (jalur Docker Compose, karena migrasinya ditangani service `api-migrate`)
+
+⚠️ Kalau di Vercel environment variable `RUN_MIGRATIONS` bernilai `false`, migrasi otomatis mati —
 hapus variabelnya atau ubah jadi `true`.
-
-Kalau migrasi gagal, container mencoba 3× (jeda 5 detik) lalu berhenti supaya tidak ada aplikasi yang
-melayani request di atas skema yang salah.
 
 Jalur manual (kalau perlu, mis. dari Mac dengan URL langsung Neon):
 
