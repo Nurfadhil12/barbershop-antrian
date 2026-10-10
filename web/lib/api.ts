@@ -24,11 +24,30 @@ async function request<T>(path: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, { cache: 'no-store' });
-  } catch (cause) {
+  } catch {
     throw new ApiError(`Tidak bisa menghubungi API (${url}).`, 0);
   }
+
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+
+  // Respons non-JSON = hampir selalu halaman error dari platform (Vercel mengirim
+  // teks polos seperti "A server error has occurred"), bukan dari aplikasi kita.
+  // Tampilkan status + potongan body supaya penyebabnya kelihatan, jangan disembunyikan
+  // di balik error JSON.parse.
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const snippet = text.replace(/\s+/g, ' ').slice(0, 200);
+      throw new ApiError(
+        `API menjawab dengan ${res.status} dan isi non-JSON (${url}): "${snippet}". ` +
+          `Periksa log service api dan pastikan DATABASE_URL sudah di-set.`,
+        res.status,
+      );
+    }
+  }
+
   if (!res.ok) {
     throw new ApiError(extractMessage(data, res.status), res.status);
   }
